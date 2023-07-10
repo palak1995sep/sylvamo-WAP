@@ -1,0 +1,721 @@
+---
+version: 1.0
+description: "Checking wireless accesspoint alarm status in controller network device"
+input:
+  - assignment_group
+  - ci_address
+  - customer_name
+  - customer_abbr
+  - detailed_desc
+  - inc_number
+  - inc_sys_id
+  - incident_state
+  - short_desc
+  - username
+  - password
+  - script_name
+  - script_options
+  - mobility_command
+  - mac_command
+  - accesspoint_name
+  - mobility_start_index_check
+  - ap_join_status_cmd
+  - mac_start_index_check
+  - end_index_check
+  - Is_Entuity
+  - nms_poll_data
+  - configuration_item_name
+
+vars:
+  - am_status: ""
+  - error_message: ""
+  - run_error: ""
+  - controller_status: ""
+  - update_kv_result: ""
+  - login_status: ""
+  - start_timestamp: ""
+  - end_timestamp: ""
+  - found_recurrence: ""
+  - found_recurrence_value: ""
+  - found_recurrence_inc_cnt: ""
+  - single_quote: "'"
+  - nms_host: "system.{{ ctx().nms_poll_data }}"
+  - stdout_data: ""
+  - worknote: ""
+  - ping_recheck_total: 0
+  - connectivity_retry: 0
+  - connectivity_sleep_secs: 300
+  - ping_retry: 0
+  - ping_sleep_secs: 300
+  - ping_output: ""
+  - controller_ap_retry: 0
+  - controller_ap_sleep_secs: 180
+  - connectivity_output: ""
+  - controller_ip_mac_retry: 0
+  - controller_ip_mac_sleep_secs: 180
+  - ip_mac_list: []
+  - ip_address_list: []
+  - controller_ip_mac_action: "ip_mac"
+  - controller_ap_action: "ap_status"
+
+output:
+  - assignment_group: "{{ ctx().assignment_group }}"
+  - ci_address: "{{ ctx().ci_address }}"
+  - customer_name: "{{ ctx().customer_name }}"
+  - customer_abbr: "{{ ctx().customer_abbr }}"
+  - detailed_desc: "{{ ctx().detailed_desc }}"
+  - inc_number: "{{ ctx().inc_number }}"
+  - inc_sys_id: "{{ ctx().inc_sys_id }}"
+  - incident_state: "{{ ctx().incident_state }}"
+  - short_desc: "{{ ctx().short_desc }}"
+  - login_status: "{{ ctx().login_status }}"
+  - am_status: "{{ ctx().am_status }}"
+  - error_message: "{{ ctx().error_message }}"
+  - run_error: "{{ ctx().run_error }}"
+  - controller_status: "{{ ctx().controller_status }}"
+  - update_kv_result: "{{ ctx().update_kv_result }}"
+
+
+tasks:
+  check_incident_state:
+    action: core.noop
+    next:
+      - when: "{{ succeeded() and (ctx().incident_state == '2') }}"
+        publish:
+          - start_timestamp: "{{ task('check_incident_state').start_timestamp }}"
+        do:
+          - incident_move_inprogress
+      - when: "{{ succeeded() and (ctx().incident_state == '-5') }}"
+        publish:
+          - start_timestamp: "{{ task('check_incident_state').start_timestamp }}"
+        do:
+          - incident_move_inprogress
+      - when: "{{ succeeded() and (ctx().incident_state not in ['2', '-5']) }}"
+        publish:
+          - error_message: "Incident state is not open or pending"
+          - run_error: true
+          - end_timestamp: "{{ task('check_incident_state').end_timestamp ]]"
+        do:
+          - insert_db
+
+  incident_move_inprogress:
+    action: ntt_itsm.itsm_incident_update
+    input:
+      work_in_progress: true
+      inc_id: "{{ ctx().inc_sys_id }}"
+      notes: "Incident assigned to Automation(Stackstorm). Work in progress.\nAutomation job id is: <% ctx(st2).action_execution_id %>"
+    next:
+      - when: "{{ succeeded() }}"
+        do:
+          - check_recurrence
+      - when: "{{ failed() }}"
+        publish:
+          - error_message: "Unable to update ITSM incident for {{ ctx().inc_number }}"
+        do:
+          - itsm_cleanup
+
+  check_recurrence:
+    action: ntt_itsm.itsm_recurrence_logic
+    input:
+      inc_id: "{{ ctx().inc_number }}"
+      rec_ds_key_name: "WAP_Rec_logic_days"
+      company_name: "{{ ctx().customer_name }}"
+      ci_name: "{{ ctx().configuration_item_name }}"
+      short_desc: "{{ ctx().short_desc }}"
+      long_desc: "{{ ctx().ci_address }}"
+    next:
+      - when: "{{ succeeded() and result().result.Found_Recurrence }}"
+        publish:
+          - found_recurrence: "{{ result().result.Found_Recurrence }}"
+          - found_recurrence_value: "{{ result().result.value }}"
+          - found_recurrence_inc_cnt: "{{ result().result.Found_Recurrence_Inc_Cnt }}"
+        do:
+          - rec_itsm_update_results
+      - when: "{{ succeeded() and not result().result.Found_Recurrence }}"
+        publish:
+          - found_recurrence: "{{ result().result.Found_Recurrence }}"
+          - found_recurrence_value: "{{ result().result.value }}"
+          - found_recurrence_inc_cnt: "{{ result().result.Found_Recurrence_Inc_Cnt }}"
+        do:
+          - rec_itsm_update_results
+      - when: "{{ failed() }}"
+        publish:
+          - error_message: "Unable to get the recurrence details from ITSM incident {{ ctx().inc_number }}"
+        do:
+          - itsm_cleanup
+
+  rec_itsm_update_results:
+    action: ntt_itsm.itsm_incident_update
+    input:
+      work_in_progress: true
+      inc_id: "{{ ctx().inc_sys_id }}"
+      notes: "{{ ctx().found_recurrence_value }}"
+    next:
+      - when: "{{ succeeded() }}"
+        do:
+          - check_ping_solution
+      - when: "{{ failed() }}"
+        do:
+          - itsm_cleanup
+
+  check_ping_solution:
+    action: core.noop
+    next:
+      - when: "{{ ctx().Is_Entuity }}"
+        do:
+          - ping_test_entuity
+      - when: "{{ not ctx().Is_Entuity }}"
+        do:
+          - noop
+
+  ping_test_entuity:
+    action: core.remote
+    input:
+      hosts: "{{ st2kv(ctx().nms_host).split(',')[0] }}"
+      password: <% st2kv('system.entuity_pass', decrypt => true) %>
+      username: "{{ st2kv('system.entuity_user') }}"
+      cmd: "/bin/ping -c 10 -I {{ st2kv(ctx().nms_host).split(',')[1] }} {{ ctx().ci_address }}"
+    next:
+      - when: "{{ succeeded() }}"
+        publish:
+          - uptime_value: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - ping_output: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - worknote: |
+              The device {{ ctx().ci_address }} is reachable. Proceeding with WAP Analysis.
+
+              {{ ctx().ping_output }}
+        do:
+          - itsm_update_results
+          - check_entuity
+      - when: "{{ failed() and ctx().ping_retry < 3 }}"
+        publish:
+          - ping_recheck_total: "{{ ctx().ping_recheck_total + 1 }}"
+          - ping_output: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout if result()[st2kv(ctx().nms_host).split(',')[0]].stdout != '' else result()[st2kv(ctx().nms_host).split(',')[0]].stderr }}"
+          - run_error: true
+          - run_error_uptime: true
+          - worknote: |
+               Automation found the device {{ ctx().ci_address }} is not reachable. The ping status will be checked again in 5 minutes.
+
+               {{ ctx().ping_output }}
+          - ping_retry: "{{ ctx().ping_retry + 1 }}"
+        do:
+          - itsm_update_results
+          - ping_delay
+      - when: "{{ failed() and ctx().ping_retry >= 3 }}"
+        publish:
+          - error_message: "the device {{ ctx().ci_address }} is not reachable even after 15 minutes.\n"
+          - ping_output: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout if result()[st2kv(ctx().nms_host).split(',')[0]].stdout != '' else result()[st2kv(ctx().nms_host).split(',')[0]].stderr }}"
+          - run_error: true
+          - worknote: "{{ ctx().ping_output }}"
+        do:
+          - check_escalate
+
+  ping_delay:
+    action: core.local
+    input:
+      cmd: "sleep {{ ctx().ping_sleep_secs }}"
+      timeout: 350
+    next:
+      - when: "{{ succeeded() }}"
+        do:
+          - ping_test_entuity
+      - when: "{{ failed() }}"
+        publish:
+          - stdout_data: "{{ result().stdout if result().stdout != '' else result().stderr }}"
+          - run_error: true
+          - error_message: "Automation found the device {{ ctx().ci_address }} is not reachable"
+        do:
+          - itsm_escalate
+
+  itsm_update_results:
+    action: ntt_itsm.itsm_incident_update
+    input:
+      work_in_progress: true
+      inc_id: "{{ ctx().inc_sys_id }}"
+      notes: "{{ ctx().worknote }}"
+    next:
+      - when: "{{ succeeded() }}"
+        do:
+          - noop
+      - when: "{{ failed() }}"
+        publish:
+          - error_message: "Unable to get the recurrence details from ITSM incident {{ ctx().inc_number }}!"
+          - run_error: true
+        do:
+          - itsm_cleanup
+
+  check_entuity:
+    action: core.noop
+    next:
+      - when: "{{ ctx().Is_Entuity }}"
+        do:
+          - check_connectivity_entuity
+      - when: "{{ not ctx().Is_Entuity }}"
+        do:
+        # - check_connectivity
+        - noop
+
+  check_connectivity_entuity:
+    action: core.remote
+    input:
+      hosts: "{{ st2kv(ctx().nms_host).split(',')[0] }}"
+      username: "{{ st2kv('system.entuity_user') }}"
+      password: <% st2kv('system.entuity_pass', decrypt => true) %>
+      cmd: "/home/bao_net_mon/scripts/check_connectivity.py {{ ctx().username }} {{ ctx().password }} {{ ctx().ci_address }} {{ st2kv(ctx().nms_host).split(',')[1] }}"
+      timeout: "600"
+    next:
+      - when: "{{ succeeded() and 'CONNECTION_STATUS_True' in result()[st2kv(ctx().nms_host).split(',')[0]].stdout}}"
+        publish:
+          - login_status: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - worknote: |
+              Login successful.
+              Output Details:
+              {{ ctx().login_status }}
+        do:
+          - itsm_update_results
+          - check_accesspoint_sollution
+      - when: "{{ succeeded() and 'CONNECTION_STATUS_False' in result()[st2kv(ctx().nms_host).split(',')[0]].stdout and ctx().connectivity_retry < 4 }}"
+        publish:
+          - login_output: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - run_error: true
+          - worknote: |
+               Login to {{ ctx().ci_address }} failed. The connectivity will be checked again in 5 minutes.
+
+               {{ ctx().login_output }}
+          - connectivity_retry: "{{ ctx().connectivity_retry + 1 }}"
+        do:
+          - itsm_update_results
+          - connectivity_delay
+      - when: "{{ succeeded() and 'CONNECTION_STATUS_False' in result()[st2kv(ctx().nms_host).split(',')[0]].stdout and ctx().connectivity_retry >= 4 }}"
+        publish:
+          - error_message: "Automation is unable to login to {{ ctx().ci_address }} even after an additional attempt.\n"
+          - login_output: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - run_error: true
+          - worknote: "{{ ctx().login_output }}"
+        do:
+          - check_escalate
+      - when: "{{ failed() }}"
+        publish:
+          - login_output: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout if result()[st2kv(ctx().nms_host).split(',')[0]].stdout != '' else result()[st2kv(ctx().nms_host).split(',')[0]].stderr }}"
+          - end_timestamp: "{{ task('check_connectivity_entuity').end_timestamp }}"
+          - worknote: |
+              Output Details:
+                {{ ctx().login_output }}
+          - run_error: true
+        do:
+          - itsm_escalate_login_failed
+
+  connectivity_delay:
+    action: core.local
+    input:
+      cmd: "sleep {{ ctx().connectivity_sleep_secs }}"
+      timeout: 350
+    next:
+      - when: "{{ succeeded() }}"
+        do:
+          - check_connectivity_entuity
+      - when: "{{ failed() }}"
+        publish:
+          - error_message: "{{ result().stdout if result().stdout != '' else result().stderr }}"
+          - run_error: true
+          - worknote: |
+               Automation is not able to connect to {{ ctx().ci_address }}. Escalating the ticket.
+
+               {{ ctx().error_message }}
+        do:
+          - itsm_escalate_login_failed
+
+  itsm_escalate_login_failed:
+    action: ntt_itsm.itsm_incident_update
+    input:
+      escalate: true
+      inc_id: "{{ ctx().inc_sys_id }}"
+      notes: "Automation is escalating this incident as it was unable to login to the remote machine\n. {{ ctx().worknote }}"
+    next:
+      - when: "{{ succeeded() }}"
+        publish:
+          - am_status: "Failure"
+          - end_timestamp: "{{ task('itsm_escalate_login_failed').end_timestamp }}"
+        do:
+          - insert_db
+      - when: "{{ failed() }}"
+        publish:
+          - error_message: "Unable to update ITSM incident {{ ctx().inc_number }} while escalate"
+          - run_error: true
+          - end_timestamp: "{{ task('itsm_escalate_login_failed').end_timestamp }}"
+        do:
+          - insert_db
+
+  check_accesspoint_sollution:
+    action: core.noop
+    next:
+      - when: "{{ ctx().Is_Entuity }}"
+        do:
+          - get_controller_ip_mac_status_entuity
+      - when: "{{ not ctx().Is_Entuity }}"
+        do:
+        # - get_controller_ip_mac_status
+        - noop
+
+  get_controller_ip_mac_status_entuity:
+    action: core.remote
+    input:
+      hosts: "{{ st2kv(ctx().nms_host).split(',')[0] }}"
+      username: "{{ st2kv('system.entuity_user') }}"
+      password: <% st2kv('system.entuity_pass', decrypt => true) %>
+      cmd: "/home/bao_net_mon/scripts/wap_accesspoint_status_test.py '/home/bao_net_mon/scripts/nw_clogin.sh' {{ ctx().single_quote }}{{ ctx().script_options }}{{ ctx().single_quote }}  {{ ctx().single_quote }}{{ ctx().username }}{{ ctx().single_quote }}  {{ ctx().single_quote }}{{ ctx().password }}{{ ctx().single_quote }}  {{ ctx().single_quote }}{{ ctx().mobility_command }}{{ ctx().single_quote }}  {{ ctx().single_quote }}{{ ctx().mac_command }}{{ ctx().single_quote }} {{ ctx().single_quote }}{{ ctx().accesspoint_name }}{{ ctx().single_quote }} {{ ctx().single_quote }}{{ ctx().ci_address }}{{ ctx().single_quote }} {{ ctx().single_quote }}{{ ctx().mobility_start_index_check }}{{ ctx().single_quote }}  {{ ctx().single_quote }}{{ ctx().ap_join_status_cmd }}{{ ctx().single_quote }} {{ ctx().single_quote }}{{ ctx().mac_start_index_check }}{{ ctx().single_quote }} {{ ctx().single_quote }}{{ ctx().end_index_check }}{{ ctx().single_quote }} {{ ctx().single_quote }}{{ st2kv(ctx().nms_host).split(',')[1] }}{{ ctx().single_quote }} {{ ctx().single_quote }}{{ ctx().controller_ip_mac_action }}{{ ctx().single_quote }} {{ ctx().single_quote }}{{ ctx().ip_mac_list }}{{ ctx().single_quote }} {{ ctx().single_quote }}{{ ctx().ip_address_list}}{{ ctx().single_quote }}"
+      timeout: 800
+    next:
+      - when: "{{ succeeded() and 'True_SUCCESS' in result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+        publish:
+          - stdout_data: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - end_timestamp: "{{ task('get_controller_ip_mac_status_entuity').end_timestamp }}"
+          - ip_mac_list: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout.split('IP Mac address list: ')[1].split(',,')[0] }}"
+          - ip_address_list: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout.split('IP Address list: ')[1].split(',,')[0] }}"
+          - worknote: "{{ ctx().stdout_data }}"
+        do:
+          - itsm_update_results
+          - get_controller_ap_status_entuity
+      - when: "{{ succeeded() and 'False_IP_EMPTY' in result()[st2kv(ctx().nms_host).split(',')[0]].stdout and ctx().controller_ip_mac_retry < 3 }}"
+        publish:
+          - stdout_data: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - error_message: "No results found after executing show mobility group command in controller {{ ctx().ci_address }}\n"
+          - end_timestamp: "{{ task('get_controller_ip_mac_status_entuity').end_timestamp }}"
+          - controller_ip_mac_retry: "{{ ctx().controller_ip_mac_retry + 1 }}"
+          - worknote: "{{ ctx().stdout_data }}. Show mobility summary will be fetched again after 3 minutes"
+        do:
+          - itsm_update_results
+          - get_controller_ip_mac_delay
+      - when: "{{ succeeded() and 'False_IP_EMPTY' in result()[st2kv(ctx().nms_host).split(',')[0]].stdout and ctx().controller_ip_mac_retry >= 3 }}"
+        publish:
+          - stdout_data: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - error_message: "No results found after executing show mobility group command in controller {{ ctx().ci_address }}\n"
+          - end_timestamp: "{{ task('get_controller_ip_mac_status_entuity').end_timestamp }}"
+          - worknote: "{{ ctx().stdout_data }}"
+        do:
+          - check_escalate
+      - when: "{{ succeeded() and 'False_RESULTS_EMPTY' in result()[st2kv(ctx().nms_host).split(',')[0]].stdout and ctx().controller_ip_mac_retry < 5 }}"
+        publish:
+          - error_message: "No results found after executing show ap search <ap_name> command in controller {{ ctx().ci_address }}"
+          - stdout_data: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - end_timestamp: "{{ task('get_controller_ip_mac_status_entuity').end_timestamp }}"
+          - ip_address_list: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout.split('IP Address list: ')[1].split(',,')[0] }}"
+          - controller_ip_mac_retry: "{{ ctx().controller_ip_mac_retry + 1 }}"
+          - worknote: |
+               {{ ctx().error_message }}. MAC Address will be fetched again in 3 minutes.
+
+               {{ ctx().stdout_data }}
+        do:
+          - itsm_update_results
+          - get_controller_ip_mac_delay
+      - when: "{{ succeeded() and 'False_RESULTS_EMPTY' in result()[st2kv(ctx().nms_host).split(',')[0]].stdout and ctx().controller_ip_mac_retry >= 5 }}"
+        publish:
+          - error_message: "Automation is unable to resolve the incident even after 5 iterations.\n"
+          - stdout_data: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - end_timestamp: "{{ task('get_controller_ip_mac_status_entuity').end_timestamp }}"
+          - worknote: "{{ ctx().stdout_data }}"
+        do:
+          - check_escalate
+      - when: "{{ succeeded() and 'False_FAILED_SCRIPT' in result()[st2kv(ctx().nms_host).split(',')[0]].stdout and ctx().controller_ip_mac_retry < 3 }}"
+        publish:
+          - stdout_data: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - error_message: "Automation Failed to get IP List/MAC address data for accesspoint.\n"
+          - end_timestamp: "{{ task('get_controller_ip_mac_status_entuity').end_timestamp }}"
+          - controller_ip_mac_retry: "{{ ctx().controller_ip_mac_retry + 1 }}"
+          - worknote: "{{ ctx().stdout_data }}. Data for accesspoint will be fetched again in 3 minutes"
+        do:
+          - itsm_update_results
+          - get_controller_ip_mac_delay
+      - when: "{{ succeeded() and 'False_FAILED_SCRIPT' in result()[st2kv(ctx().nms_host).split(',')[0]].stdout and ctx().controller_ip_mac_retry >= 3 }}"
+        publish:
+          - stdout_data: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - error_message: "Automation Failed to get IP List/MAC address data for accesspoint.\n"
+          - end_timestamp: "{{ task('get_controller_ip_mac_status_entuity').end_timestamp }}"
+          - worknote: "{{ ctx().stdout_data }}"
+        do:
+          - itsm_escalate
+      - when: "{{ failed() }}"
+        publish:
+          - stdout_data: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - error_message: |
+                         Automation Failed to get data for accesspoint.
+
+                         {{ result().stdout }}
+          - end_timestamp: "{{ task('get_controller_ip_mac_status_entuity').end_timestamp }}"
+        do:
+          - itsm_cleanup
+
+  get_controller_ip_mac_delay:
+    action: core.local
+    input:
+      cmd: "sleep {{ ctx().controller_ip_mac_sleep_secs }}"
+      timeout: 240
+    next:
+      - when: "{{ succeeded() }}"
+        do:
+          - get_controller_ip_mac_status_entuity
+      - when: "{{ failed() }}"
+        publish:
+          - error_message: "{{ result().stdout if result().stdout != '' else result().stderr }}"
+          - run_error: true
+          - worknote: |
+               Automation is not able to fetch AP status. Escalating the ticket.
+
+               {{ ctx().error_message }}
+        do:
+          - itsm_escalate
+
+  get_controller_ap_status_entuity:
+    action: core.remote
+    input:
+      hosts: "{{ st2kv(ctx().nms_host).split(',')[0] }}"
+      username: "{{ st2kv('system.entuity_user') }}"
+      password: <% st2kv('system.entuity_pass', decrypt => true) %>
+      cmd: "/home/bao_net_mon/scripts/wap_accesspoint_status.py '/home/bao_net_mon/scripts/nw_clogin.sh' {{ ctx().single_quote }}{{ ctx().script_options }}{{ ctx().single_quote }}  {{ ctx().single_quote }}{{ ctx().username }}{{ ctx().single_quote }}  {{ ctx().single_quote }}{{ ctx().password }}{{ ctx().single_quote }}  {{ ctx().single_quote }}{{ ctx().mobility_command }}{{ ctx().single_quote }}  {{ ctx().single_quote }}{{ ctx().mac_command }}{{ ctx().single_quote }} {{ ctx().single_quote }}{{ ctx().accesspoint_name }}{{ ctx().single_quote }} {{ ctx().single_quote }}{{ ctx().ci_address }}{{ ctx().single_quote }} {{ ctx().single_quote }}{{ ctx().mobility_start_index_check }}{{ ctx().single_quote }}  {{ ctx().single_quote }}{{ ctx().ap_join_status_cmd }}{{ ctx().single_quote }} {{ ctx().single_quote }}{{ ctx().mac_start_index_check }}{{ ctx().single_quote }} {{ ctx().single_quote }}{{ ctx().end_index_check }}{{ ctx().single_quote }} {{ ctx().single_quote }}{{ st2kv(ctx().nms_host).split(',')[1] }}{{ ctx().single_quote }} {{ ctx().single_quote }}{{ ctx().controller_ap_action }}{{ ctx().single_quote }} {{ ctx().single_quote }}{{ ctx().ip_mac_list }}{{ ctx().single_quote }} {{ ctx().single_quote }}{{ ctx().ip_address_list }}{{ ctx().single_quote }}"
+      timeout: 800
+    next:
+      - when: "{{ succeeded() and 'True_SUCCESS' in result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+        publish:
+          - stdout_data: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - error_message: ""
+          - end_timestamp: "{{ task('get_controller_ap_status_entuity').end_timestamp }}"
+          - worknote: "{{ ctx().stdout_data }}"
+        do:
+          - finish
+      - when: "{{ succeeded() and 'False_RESULTS_EMPTY' in result()[st2kv(ctx().nms_host).split(',')[0]].stdout and ctx().controller_ap_retry < 3 }}"
+        publish:
+          - error_message: "Automation could not find join status in any of the controllers configured in mobility group"
+          - stdout_data: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - end_timestamp: "{{ task('get_controller_ap_status_entuity').end_timestamp }}"
+          - controller_ap_retry: "{{ ctx().controller_ap_retry + 1 }}"
+          - worknote: |
+               {{ ctx().error_message }}. AP status will be checked again in 3 minutes.
+
+               {{ ctx().stdout_data }}
+        do:
+          - itsm_update_results
+          - get_controller_ap_delay
+      - when: "{{ succeeded() and 'False_FAILURE' in result()[st2kv(ctx().nms_host).split(',')[0]].stdout and ctx().controller_ap_retry < 3 }}"
+        publish:
+          - error_message: "Accesspoint not connected to any of the controller"
+          - stdout_data: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - end_timestamp: "{{ task('get_controller_ap_status_entuity').end_timestamp }}"
+          - controller_ap_retry: "{{ ctx().controller_ap_retry + 1 }}"
+          - worknote: |
+               {{ ctx().error_message }}. AP status will be checked again in 3 minutes.
+
+               {{ ctx().stdout_data }}
+        do:
+          - itsm_update_results
+          - get_controller_ap_delay
+      - when: "{{ succeeded() and ('False_RESULTS_EMPTY' in result()[st2kv(ctx().nms_host).split(',')[0]].stdout or 'False_FAILURE' in result()[st2kv(ctx().nms_host).split(',')[0]].stdout) and ctx().controller_ap_retry >= 3 }}"
+        publish:
+          - error_message: "Automation is unable to find join status even after 3 iterations.\n"
+          - stdout_data: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - worknote: "{{ ctx().stdout_data }}"
+        do:
+          - check_escalate
+      - when: "{{ succeeded() and 'False_FAILED_SCRIPT' in result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+        publish:
+          - stdout_data: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - error_message: "Automation Failed to get AP join status for accesspoint."
+          - end_timestamp: "{{ task('get_controller_ap_status_entuity').end_timestamp }}"
+          - worknote: "{{ ctx().stdout_data }}"
+        do:
+          - itsm_escalate
+      - when: "{{ failed() }}"
+        publish:
+          - stdout_data: "{{ result()[st2kv(ctx().nms_host).split(',')[0]].stdout }}"
+          - error_message: |
+                         Automation failed to get data for accesspoint.
+                         {{ ctx().stdout_data }}
+          - end_timestamp: "{{ task('get_controller_ap_status_entuity').end_timestamp }}"
+        do:
+          - itsm_cleanup
+
+  get_controller_ap_delay:
+    action: core.local
+    input:
+      cmd: "sleep {{ ctx().controller_ap_sleep_secs }}"
+      timeout: 240
+    next:
+      - when: "{{ succeeded() }}"
+        do:
+          - get_controller_ap_status_entuity
+      - when: "{{ failed() }}"
+        publish:
+          - error_message: "{{ result().stdout if result().stdout != '' else result().stderr }}"
+          - run_error: true
+          - worknote: |
+               Automation is not able to fetch AP status. Escalating the ticket.
+
+               {{ ctx().error_message }}
+        do:
+          - itsm_escalate
+
+  finish:
+    action: core.noop
+    next:
+      - when: "{{ not ctx().found_recurrence }}"
+        do:
+          - itsm_close
+      - when: "{{ ctx().found_recurrence  }}"
+        do:
+          - itsm_escalate_recurrence
+
+  check_escalate:
+    action: core.noop
+    next:
+      - when: "{{ not ctx().found_recurrence }}"
+        do:
+          - itsm_escalate
+      - when: "{{ ctx().found_recurrence }}"
+        do:
+          - itsm_escalate_recurrence
+
+  itsm_escalate:
+    action: ntt_itsm.itsm_incident_update
+    input:
+      escalate: true
+      inc_id: "{{ ctx().inc_sys_id }}"
+      notes: |
+           Automation is escalating this incident as {{ ctx().error_message }}
+           {{ ctx().worknote }}
+    next:
+      - when: "{{ succeeded() }}"
+        publish:
+          - am_status: "Failure"
+          - end_timestamp: "{{ task('itsm_escalate').end_timestamp }}"
+        do:
+          - insert_db
+      - when: "{{ failed() }}"
+        publish:
+          - error_message: "Unable to update the ITSM incident {{ ctx().inc_number }}!"
+          - run_error: true
+          - end_timestamp: "{{ task('itsm_escalate').end_timestamp }}"
+        do:
+          - insert_db
+
+  itsm_cleanup:
+    action: ntt_itsm.itsm_incident_update
+    input:
+      escalate: true
+      inc_id: "{{ ctx().inc_sys_id }}"
+      notes: "{{ ctx().error_message }}"
+    next:
+      - when: "{{ succeeded() }}"
+        publish:
+          - am_status: "Failure"
+          - end_timestamp: "{{ task('itsm_cleanup').end_timestamp }}"
+        do:
+          - insert_db
+      - when: "{{ failed() }}"
+        publish:
+          - error_message: "Unable to update ITSM incident {{ ctx().inc_number }}"
+          - run_error: true
+          - end_timestamp: "{{ task('itsm_cleanup').end_timestamp }}"
+        do:
+          - insert_db
+
+  insert_db:
+    action: ntt_monitoring.sql_insert
+    input:
+      metric_data:
+        Description: "wireless_accesspoint_alarm"
+        Status: "{{ 'Failure' if ctx().run_error else 'Success' }}"
+      process_data:
+        Account_Name: "{{ ctx().customer_name }}"
+        AM_Desc:
+        AM_Status: "{{ 'Failure' if ctx().run_error else 'Success' }}"
+        Configuration_Item: "{{ ctx().ci_address }}"
+        ITSM_Name: "helix"
+        Job_Id: <% ctx(st2).action_execution_id %>
+        Module_Name: "wireless_accesspoint_alarm"
+        Ref_No: "{{ ctx().inc_number }}"
+        # Tower_Name: "{{ ctx().os_type }}"
+        Assignment_Group: "{{ ctx().assignment_group }}"
+        Short_Desc: "{{ ctx().short_desc | replace(':', ': ') }}"
+        Detail_Desc: "{{ ctx().detailed_desc | replace(':', ': ') }}"
+      end_timestamp: "{{ ctx().end_timestamp }}"
+      start_timestamp: "{{ ctx().start_timestamp }}"
+      account_name: "{{ ctx().customer_name }}"
+      account_service: "{{ ctx().customer_name }}"
+      incident_id: "{{ ctx().inc_number }}"
+      configuration_item: "{{ ctx().ci_address }}"
+    next:
+      - when: "{{ succeeded() and not ctx().run_error and ctx().am_status == 'Success' }}"
+        do:
+          - noop
+      - when: "{{ succeeded() and ctx().run_error }}"
+        do:
+          - fail
+      - when: "{{ failed() }}"
+        publish:
+          - error_message: "There was an error inserting into the database. Please see the execution for details."
+        do:
+          - fail
+
+  itsm_close:
+    action: ntt_itsm.itsm_incident_update
+    input:
+      close: true
+      inc_id: "{{ ctx().inc_sys_id }}"
+      notes: |
+             Automation is resolving the incident. Please check the worklog for details
+
+             Accesspoint connection status:
+             {{ ctx().stdout_data }}
+    next:
+      - when: "{{ succeeded() }}"
+        publish:
+          - am_status: "Success"
+        do:
+          - update_kv_var
+      - when: "{{ failed() }}"
+        publish:
+          - error_message: "Unable to update the ITSM incident {{ ctx().inc_number }}"
+          - run_error: true
+        do:
+           - itsm_cleanup
+
+  itsm_escalate_recurrence:
+    action: ntt_itsm.itsm_incident_update
+    input:
+      escalate: true
+      inc_id: "{{ ctx().inc_sys_id }}"
+      notes: |
+             Automation is escalating this incident due to recurring incidents.
+
+             Accesspoint connection status:
+             {{ ctx().worknote }}
+    next:
+      - when: "{{ succeeded() }}"
+        publish:
+          - am_status: "Failure"
+          - end_timestamp: "{{ task('itsm_escalate_recurrence').end_timestamp }}"
+        do:
+          - insert_db
+      - when: "{{ failed() }}"
+        publish:
+          - error_message: "Unable to update the ITSM incident {{ ctx().inc_number }}!"
+          - run_error: true
+          - end_timestamp: "{{ task('itsm_escalate').end_timestamp }}"
+        do:
+          - insert_db
+
+  update_kv_var:
+    action: ntt_itsm.itsm_processing_incs_remove
+    input:
+      inc_id: "{{ ctx().inc_number }}"
+    next:
+      - when: "{{ succeeded() }}"
+        publish:
+          - update_kv_result: "{{ ctx().inc_number }} removed successfully from datastore"
+        do:
+          - noop
+      - when: "{{ failed() }}"
+        publish:
+          - update_kv_result: "{{ ctx().inc_number }} not removed"
+        do:
+          - fail
+
