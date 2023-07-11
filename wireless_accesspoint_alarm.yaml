@@ -1,113 +1,871 @@
 ---
-name: wireless_accesspoint_alarm
-pack: ntt_monitoring
-description: action file for wireless accesspoint alarm
-runner_type: orquesta
-entry_point: workflows/wireless_accesspoint_alarm.yaml
-parameters:
-  assignment_group:
-    type: string
-    description: "Assignment group from ITSM to pass into the database entry"
-    required: true
-  ci_address:
-    type: string
-    description: "FQDN of the Windows server to check the CPUs for"
-    required: true
-  customer_name:
-    type: string
-    description: "Customer name from ITSM to pass into the database entry"
-    required: true
-  customer_abbr:
-    type: string
-    description: "3 letter customer abbreviation"
-    required: true
-    default: "{{ st2kv.system.customer_abbr }}"
-  detailed_desc:
-    type: string
-    description: "Detailed description name from ITSM to pass into the database entry"
-    required: true
-  inc_number:
-    type: string
-    description: "ITSM incident number"
-    required: true
-  inc_sys_id:
-    type: string
-    description: "ITSM incident sys_id"
-    required: true
-  incident_state:
-    type: string
-    description: "ITSM incident state"
-    required: true
-    default: '2'
-  short_desc:
-    type: string
-    description: "Short description name from ITSM to pass into the database entry"
-    required: true
-  configuration_item_name:
-    type: string
-    description: "CI name from CMDB"
-    required: true
-  username:
-    type: string
-    description: "Username to login to the remote server"
-    required: true
-    default: "bao_net_mon"
-  password:
-    type: string
-    description: "Password to login to the remote server"
-    required: true
-    default: "JJjj1003"
-  script_name:
-    type: string
-    description: "c login script path"
-    required: true
-    default: "/opt/stackstorm/packs/ntt_monitoring/actions/nw_clogin.sh"
-  script_options:
-    type: string
-    description: "c login script options"
-    required: true
-    default: "-noenable"
-  mobility_command:
-    type: string
-    description: "Command to fetch controller mobility details"
-    required: true
-    default: "show mobility summary"
-  mac_command:
-    type: string
-    description: "Command to fetch mac address details"
-    required: true
-    default: "show ap search"
-  accesspoint_name:
-    type: string
-    description: "Accesspoint name to check for mac address"
-    required: true
-  mobility_start_index_check:
-    type: string
-    description: "Start index value for show mobility summary command"
-    required: true
-    default: "MAC Address"
-  ap_join_status_cmd:
-    type: string
-    description: "Command to fetch ap join status details"
-    required: true
-    default: "show ap join stats summary"
-  mac_start_index_check:
-    type: string
-    description: "Start index value for show ap join status summary"
-    required: true
-    default: "Ethernet MAC"
-  end_index_check:
-    type: string
-    description: "End index value for the commands"
-    required: true
-    default: "(Cisco Controller) >logout"
-  Is_Entuity:
-    type: string
-    description: "IS your account using entuity or not"
-    required: true
-    default: 'true'
-  nms_poll_data:
-    type: string
-    description: " Entuity server and interface ip "
-    required: true
+  class_name: "ServiceNowIncidentSensor"
+  entry_point: "servicenow_incident_sensor.py"
+  description: "Sensor to find and keep a list of all the incidents in ServiceNow."
+  poll_interval: 60
+  enabled: true
+  trigger_types:
+    -
+      name: "high_cpu"
+      description: "If an incident is created for high CPU utilization then check the incident type, try running cleanup, and update the incident with results"
+      payload_schema:
+        type: "object"
+        properties:
+          assignment_group:
+            type: "string"
+            format: "Assignment group from SN to pass into the database entry"
+          ci_address:
+            type: "string"
+            format: "FQDN of the server to check the CPUs for"
+          cpu_name:
+            type: "string"
+            format: "Name of the CPU to check on the server"
+          cpu_type:
+            type: "string"
+            format: "Type of the CPU to check on the server"
+          customer_name:
+            type: "string"
+            format: "Customer name from SN to pass into the database entry"
+          detailed_desc:
+            type: "string"
+            format: "Detailed description name from SN to pass into the database entry"
+          inc_number:
+            type: "string"
+            format: "ITSM incident number"
+          inc_sys_id:
+            type: "string"
+            format: "ITSM incident sys_id"
+          os_type:
+            type: "string"
+            format: "Operating system type of the server (windows, linux)"
+          short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into the database entry"
+          threshold_percent:
+            type: "string"
+            format: "Maximum acceptable CPU usage on the server"
+          rec_short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into recurrence logic"
+          rec_detailed_desc:
+            type: "string"
+            format: "Detailed description name from ITSM to pass into recurrence logic"
+          configuration_item_name:
+            type: "string"
+            format: "CI name from ITSM to pass into recurrence logic"
+    -
+      name: "eigrp_peer_route_disappeared"
+      description: "If an incident is created for bgp peer issue then check and update the incident with results"
+      payload_schema:
+        type: "object"
+        properties:
+          assignment_group:
+            type: "string"
+            format: "Assignment group from SN to pass into the database entry"
+          ci_address:
+            type: "string"
+            format: "CI address of the device"
+          peer_ip:
+            type: "string"
+            format: "Peered ip which has been route disappeared"
+          configuration_item_name:
+            type: "string"
+            format: "CI Name of the device"
+          customer_name:
+            type: "string"
+            format: "Customer name from SN to pass into the database entry"
+          detailed_desc:
+            type: "string"
+            format: "Detailed description name from SN to pass into the database entry"
+          inc_number:
+            type: "string"
+            format: "ITSM incident number"
+          inc_sys_id:
+            type: "string"
+            format: "ITSM incident sys_id"
+          short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into the database entry"
+          rec_short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into recurrence logic"
+          rec_detailed_desc:
+            type: "string"
+            format: "Detailed description name from ITSM to pass into recurrence logic"
+          nms_poll_data:
+            type: "string"
+            format: "NMS Server data / Entuity server hostname"
+    -
+      name: "high_disk"
+      description: "If an incident is created for high disk utilization then check the incident type, try running cleanup, and update the incident with results"
+      payload_schema:
+        type: "object"
+        properties:
+          assignment_group:
+            type: "string"
+            format: "Assignment group from SN to pass into the database entry"
+          ci_address:
+            type: "string"
+            format: "FQDN of the server to check the CPUs for"
+          customer_name:
+            type: "string"
+            format: "Customer name from SN to pass into the database entry"
+          detailed_desc:
+            type: "string"
+            format: "Detailed description name from SN to pass into the database entry"
+          disk_name:
+            type: "string"
+            format: "Name of the disk to check on the server"
+          inc_number:
+            type: "string"
+            format: "ITSM incident number"
+          inc_sys_id:
+            type: "string"
+            format: "ITSM incident sys_id"
+          os_type:
+            type: "string"
+            format: "Operating system type of the server (windows, linux)"
+          short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into the database entry"
+          threshold_percent:
+            type: "integer"
+            format: "Maximum acceptable disk usage on the server (percent)"
+          threshold_mb:
+            type: "integer"
+            format: "threshold mb percentage"
+          threshold_type:
+            type: "string"
+            format: "threshold type"
+          rec_short_desc:
+            type: "string"
+            format: "Recurrence short description"
+          rec_detailed_desc:
+            type: "string"
+            format: "Recurrence detailed description"
+          configuration_item_name:
+            type: "string"
+            format: "Configuration item name"
+    -
+      name: "high_memory"
+      description: "If an incident is created for high memory utilization then check the incident type, try running cleanup, and update the incident with results"
+      payload_schema:
+        type: "object"
+        properties:
+          assignment_group:
+            type: "string"
+            format: "Assignment group from SN to pass into the database entry"
+          ci_address:
+            type: "string"
+            format: "FQDN of the server to check the CPUs for"
+          customer_name:
+            type: "string"
+            format: "Customer name from SN to pass into the database entry"
+          detailed_desc:
+            type: "string"
+            format: "Detailed description name from SN to pass into the database entry"
+          inc_number:
+            type: "string"
+            format: "ITSM incident number"
+          inc_sys_id:
+            type: "string"
+            format: "ITSM incident sys_id"
+          memory_threshold:
+            type: "string"
+            format: "Threshold to alert on of utilization exceeds this value"
+          os_type:
+            type: "string"
+            format: "Operating system type of the server (windows, linux)"
+          short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into the database entry"
+#    -
+#     name: "unreachable_ping"
+#      description: "If an incident is created for unreachable to ping then check the incident type, try running cleanup, and update the incident with results"
+#      payload_schema:
+#        type: "object"
+#        properties:
+#          assignment_group:
+#            type: "string"
+#            format: "Assignment group from SN to pass into the database entry"
+#          check_uptime:
+#            type: "string"
+#            format: "Whether the uptime needs to be checked or not"
+#          ci_address:
+#            type: "string"
+#            format: "FQDN of the server to check the CPUs for"
+#          customer_name:
+#            type: "string"
+#            format: "Customer name from SN to pass into the database entry"
+#          detailed_desc:
+#            type: "string"
+#            format: "Detailed description name from SN to pass into the database entry"
+#          inc_number:
+#            type: "string"
+#            format: "ITSM incident number"
+#          inc_sys_id:
+#            type: "string"
+#            format: "ITSM incident sys_id"
+#          os_type:
+#            type: "string"
+#            format: "Operating system type of the server (windows, linux)"
+#          short_desc:
+#            type: "string"
+#            format: "Short description name from ITSM to pass into the database entry"
+    -
+      name: "win_memory_high"
+      description: "If an incident is created for high memory utilization then check and update the incident with results"
+      payload_schema:
+        type: "object"
+        properties:
+          assignment_group:
+            type: "string"
+            format: "Assignment group from SN to pass into the database entry"
+          ci_address:
+            type: "string"
+            format: "FQDN of the server to check the CPUs for"
+          customer_name:
+            type: "string"
+            format: "Customer name from SN to pass into the database entry"
+          detailed_desc:
+            type: "string"
+            format: "Detailed description name from SN to pass into the database entry"
+          inc_number:
+            type: "string"
+            format: "ITSM incident number"
+          inc_sys_id:
+            type: "string"
+            format: "ITSM incident sys_id"
+          os_type:
+            type: "string"
+            format: "Operating system type of the server (windows, linux)"
+          short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into the database entry"
+          threshold_percent:
+            type: "string"
+            format: "Maximum acceptable memory usage on the server"
+          incident_state:
+            type: "string"
+            format: "incident state from SN to pass into the database entry"
+    -
+      name: "linux_cpu_high"
+      description: "If an incident is created for Unix high CPU utilization then check the incident type, try running cleanup, and update the incident with results"
+      payload_schema:
+        type: "object"
+        properties:
+           assignment_group:
+             type: "string"
+             format: "Assignment group from SN to pass into the database entry"
+           ci_address:
+             type: "string"
+             format: "FQDN of the server to check the CPUs for"
+           cpu_name:
+             type: "string"
+             format: "Name of the CPU to check on the server"
+           cpu_type:
+             type: "string"
+             format: "Type of the CPU to check on the server"
+           customer_name:
+             type: "string"
+             format: "Customer name from SN to pass into the database entry"
+           detailed_desc:
+             type: "string"
+             format: "Detailed description name from SN to pass into the database entry"
+           inc_number:
+             type: "string"
+             format: "ITSM incident number"
+           inc_sys_id:
+             type: "string"
+             format: "ITSM incident sys_id"
+           os_type:
+             type: "string"
+             format: "Operating system type of the server (windows, linux)"
+           short_desc:
+             type: "string"
+             format: "Short description name from ITSM to pass into the database entry"
+           threshold_percent:
+             type: "string"
+             format: "Maximum acceptable CPU usage on the server"
+           incident_state:
+             type: "string"
+             format: "incident state from SN to pass into the database entry"
+           rec_short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into recurrence logic"
+           rec_detailed_desc:
+            type: "string"
+            format: "Detailed description name from ITSM to pass into recurrence logic"
+    -
+      name: "win_service_check"
+      description: "If an incident is created for windows service then check the status of the service and update the incident with results"
+      payload_schema:
+        type: "object"
+        properties:
+          assignment_group:
+            type: "string"
+            format: "Assignment group from SN to pass into the database entry"
+          ci_address:
+            type: "string"
+            format: "FQDN of the server to check the CPUs for"
+          customer_name:
+            type: "string"
+            format: "Customer name from SN to pass into the database entry"
+          detailed_desc:
+            type: "string"
+            format: "Detailed description name from SN to pass into the database entry"
+          inc_number:
+            type: "string"
+            format: "ITSM incident number"
+          short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into the database entry"
+          incident_state:
+            type: "string"
+            format: "incident state from SN to pass into the database entry"
+          service_name:
+            type: "string"
+            format: "service name from SN to pass workflow for validation"
+          rec_short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into recurrence logic"
+          rec_detailed_desc:
+            type: "string"
+            format: "Detailed description name from ITSM to pass into recurrence logic"
+          configuration_item_name:
+            type: "string"
+            format: "CI name from ITSM to pass into recurrence logic"
+    -
+      name: "disk_usage_check_linux"
+      description: "If an incident is created for disk utilization then check and update the incident with results"
+      payload_schema:
+        type: "object"
+        properties:
+          assignment_group:
+            type: "string"
+            format: "Assignment group from SN to pass into the database entry"
+          ci_address:
+            type: "string"
+            format: "FQDN of the server to check the CPUs for"
+          customer_name:
+            type: "string"
+            format: "Customer name from SN to pass into the database entry"
+          detailed_desc:
+            type: "string"
+            format: "Detailed description name from SN to pass into the database entry"
+          inc_number:
+            type: "string"
+            format: "ITSM incident number"
+          inc_sys_id:
+            type: "string"
+            format: "ITSM incident sys_id"
+          os_type:
+            type: "string"
+            format: "Operating system type of the server (windows, linux)"
+          short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into the database entry"
+          disk_name:
+            type: "string"
+            format: "disk name from ITSM"
+          disk_threshold:
+            type: "string"
+            format: "disk threshold from ITSM"
+          rec_short_desc:
+            type: "string"
+            format: "Recurrence short desc from ITSM"
+          rec_detailed_desc:
+            type: "string"
+            format: "Recurrence detail desc from ITSM"
+          configuration_item_name:
+            type: "string"
+            format: "Configuration item name from ITSM"
+          incident_state:
+            type: "string"
+            format: "incident state from SN to pass into the database entry"
+    -
+      name: "win_cpu_queue_length"
+      description: "If an incident is created for high CPU Queue length then check and update the incident with results"
+      payload_schema:
+        type: "object"
+        properties:
+          assignment_group:
+            type: "string"
+            format: "Assignment group from SN to pass into the database entry"
+          ci_address:
+            type: "string"
+            format: "FQDN of the server to check the CPUs for"
+          customer_name:
+            type: "string"
+            format: "Customer name from SN to pass into the database entry"
+          detailed_desc:
+            type: "string"
+            format: "Detailed description name from SN to pass into the database entry"
+          inc_number:
+            type: "string"
+            format: "ITSM incident number"
+          inc_sys_id:
+            type: "string"
+            format: "ITSM incident sys_id"
+          os_type:
+            type: "string"
+            format: "Operating system type of the server (windows, linux)"
+          cpu_type:
+            type: "string"
+            format: "cpu type"
+          short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into the database entry"
+          threshold_queue:
+            type: "string"
+            format: "Maximum acceptable cpu Queue length on the server"
+          incident_state:
+            type: "string"
+            format: "incident state from SN to pass into the database entry"
+    -
+
+      name: "unix_process_alert"
+      description: "If an incident is created for disk utilization then check and update the incident with results"
+      payload_schema:
+        type: "object"
+        properties:
+          assignment_group:
+            type: "string"
+            format: "Assignment group from SN to pass into the database entry"
+          ci_address:
+            type: "string"
+            format: "FQDN of the server to check the CPUs for"
+          customer_name:
+            type: "string"
+            format: "Customer name from SN to pass into the database entry"
+          detailed_desc:
+            type: "string"
+            format: "Detailed description name from SN to pass into the database entry"
+          inc_number:
+            type: "string"
+            format: "ITSM incident number"
+          inc_sys_id:
+            type: "string"
+            format: "ITSM incident sys_id"
+          os_type:
+            type: "string"
+            format: "Operating system type of the server (windows, linux)"
+          short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into the database entry"
+          service:
+            type: "string"
+            format: "service name from ITSM"
+          configuration_item_name:
+            type: "string"
+            format: "Configuration item name from ITSM"
+          incident_state:
+            type: "string"
+            format: "incident state from SN to pass into the database entry"
+    -
+      name: "win_monitoring_heartbeat_failure"
+      description: "If an incident is created for opsramp agent status for the given VM"
+      payload_schema:
+        type: "object"
+        properties:
+          assignment_group:
+            type: "string"
+            format: "Assignment group from SN to pass into the database entry"
+          ci_address:
+            type: "string"
+            format: "FQDN of the server to check the CPUs for"
+          customer_name:
+            type: "string"
+            format: "Customer name from SN to pass into the database entry"
+          detailed_desc:
+            type: "string"
+            format: "Detailed description name from SN to pass into the database entry"
+          inc_number:
+            type: "string"
+            format: "ITSM incident number"
+          inc_sys_id:
+            type: "string"
+            format: "ITSM incident sys_id"
+          incident_open_at:
+            type: "string"
+            format: "ITSM incident created at"
+          os_type:
+            type: "string"
+            format: "Operating system type of the server (windows, linux)"
+          short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into the database entry"
+          incident_state:
+            type: "string"
+            format: "incident state from SN to pass into the database entry"
+          rec_short_desc:
+            type: "string"
+            format: "find the recurrence incident with short desc"
+          rec_detailed_desc:
+            type: "string"
+            format: "find the recurrence incident with detail desc"
+          configuration_item_name:
+            type: "string"
+            format: "incident CI name from SN"
+          configuration_item_env:
+            type: "string"
+            format: "incident CI env from SN"
+    -
+      name: "nw_unreachable_to_ping"
+      description: "If an incident is created for network device is not reachable"
+      payload_schema:
+        type: "object"
+        properties:
+          inc_number:
+            type: "string"
+            format: "ITSM incident number"
+          inc_sys_id:
+            type: "string"
+            format: "ITSM incident sys_id"
+          ci_address:
+            type: "string"
+            format: "FQDN of the device to check the reachablity"
+          assignment_group:
+            type: "string"
+            format: "Assignment group from SN to pass into the database entry"
+          customer_name:
+            type: "string"
+            format: "Customer name from SN to pass into the database entry"
+          short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into the database entry"
+          detailed_desc:
+            type: "string"
+            format: "Detailed description name from SN to pass into the database entry"
+          incident_state:
+            type: "string"
+            format: "incident state from SN to pass into the database entry"
+          incident_open_at:
+            type: "string"
+            format: "ITSM incident created at"
+          rec_short_desc:
+            type: "string"
+            format: "find the recurrence incident with short desc"
+          rec_detailed_desc:
+            type: "string"
+            format: "find the recurrence incident with detail desc"
+          configuration_item_name:
+            type: "string"
+            format: "incident CI name from SN"
+    -
+      name: "nw_snmp_not_responding"
+      description: "If an incident is created for network device SNMP Walk not happening"
+      payload_schema:
+        type: "object"
+        properties:
+          inc_number:
+            type: "string"
+            format: "ITSM incident number"
+          inc_sys_id:
+            type: "string"
+            format: "ITSM incident sys_id"
+          ci_address:
+            type: "string"
+            format: "FQDN of the device to check the reachablity"
+          assignment_group:
+            type: "string"
+            format: "Assignment group from SN to pass into the database entry"
+          customer_name:
+            type: "string"
+            format: "Customer name from SN to pass into the database entry"
+          short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into the database entry"
+          detailed_desc:
+            type: "string"
+            format: "Detailed description name from SN to pass into the database entry"
+          incident_state:
+            type: "string"
+            format: "incident state from SN to pass into the database entry"
+          incident_open_at:
+            type: "string"
+            format: "ITSM incident created at"
+          rec_short_desc:
+            type: "string"
+            format: "find the recurrence incident with short desc"
+          rec_detailed_desc:
+            type: "string"
+            format: "find the recurrence incident with detail desc"
+          configuration_item_name:
+            type: "string"
+            format: "incident CI name from SN"
+    -
+      name: "memory_high_unix"
+      description: "If an incident is created for high CPU utilization then check the incident type, try running cleanup, and update the incident with results"
+      payload_schema:
+        type: "object"
+        properties:
+          assignment_group:
+            type: "string"
+            format: "Assignment group from SN to pass into the database entry"
+          ci_address:
+            type: "string"
+            format: "FQDN of the server to check the CPUs for"
+          customer_name:
+            type: "string"
+            format: "Customer name from SN to pass into the database entry"
+          detailed_desc:
+            type: "string"
+            format: "Detailed description name from SN to pass into the database entry"
+          inc_number:
+            type: "string"
+            format: "ITSM incident number"
+          inc_sys_id:
+            type: "string"
+            format: "ITSM incident sys_id"
+          os_type:
+            type: "string"
+            format: "Operating system type of the server (windows, linux)"
+          short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into the database entry"
+          threshold_percent:
+            type: "string"
+            format: "Maximum acceptable CPU usage on the server"
+    -
+      name: "bgp_peer_check"
+      description: "If an incident is created for BGP peer check then check the incident type, try running cleanup, and update the incident with results"
+      payload_schema:
+        type: "object"
+        properties:
+          assignment_group:
+            type: "string"
+            format: "Assignment group from SN to pass into the database entry"
+          ci_address:
+            type: "string"
+            format: "FQDN of the server to check the CPUs for"
+          customer_name:
+            type: "string"
+            format: "Customer name from SN to pass into the database entry"
+          detailed_desc:
+            type: "string"
+            format: "Detailed description name from SN to pass into the database entry"
+          inc_number:
+            type: "string"
+            format: "ITSM incident number"
+          inc_sys_id:
+            type: "string"
+            format: "ITSM incident sys_id"
+          os_type:
+            type: "string"
+            format: "Operating system type of the server (windows, linux)"
+          short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into the database entry"
+    -
+      name: "nw_wap_alert_check"
+      description: "If an incident is created for AP Not Associated With Controller hen check the incident type, try running cleanup, and update the incident with results"
+      payload_schema:
+        type: 'object'
+        properties:
+          detailed_desc:
+            type: 'string'
+            format: 'Detailed description from SN to pass into the database entry'
+          inc_number:
+            type: 'string'
+            format: 'ITSM incident number'
+    -
+      name: "wireless_accesspoint_alarm"
+      description: "If an incident is created for AP Not Associated With Controller hen check the incident type, try running cleanup, and update the incident with results"
+      payload_schema:
+        type: 'object'
+        properties:
+          assignment_group:
+            type: 'string'
+            format: 'Assignment group from SN to pass into the database entry'
+          ci_address:
+            type: 'string'
+            format: 'FQDN of the server'
+          customer_name:
+            type: 'string'
+            format: 'Customer name from SN to pass into the database entry'
+          detailed_desc:
+            type: 'string'
+            format: 'Detailed description from SN to pass into the database entry'
+          inc_number:
+            type: 'string'
+            format: 'ITSM incident number'
+          inc_sys_id:
+            type: 'string'
+            format: 'ITSM incident sys id'
+          short_desc:
+            type: 'string'
+            format: 'Short description from SN to pass into the database entry'
+    -
+      name: "wireless_accesspoint_antenna_offline_alarm"
+      description: "If an incident is created for accesspoint antenna alarm then check the incident type, try running cleanup, and update the incident with results"
+      payload_schema:
+        type: 'object'
+        properties:
+          assignment_group:
+            type: 'string'
+            format: 'Assignment group from SN to pass into the database entry'
+          ci_address:
+            type: 'string'
+            format: 'FQDN of the server'
+          customer_name:
+            type: 'string'
+            format: 'Customer name from SN to pass into the database entry'
+          detailed_desc:
+            type: 'string'
+            format: 'Detailed description from SN to pass into the database entry'
+          inc_number:
+            type: 'string'
+            format: 'ITSM incident number'
+          inc_sys_id:
+            type: 'string'
+            format: 'ITSM incident sys id'
+          short_desc:
+            type: 'string'
+            format: 'Short description from SN to pass into the database entry'
+    -
+      name: "port_utilization"
+      description: "If an incident is created for port utilization issue then check and update the incident with results"
+      payload_schema:
+        type: "object"
+        properties:
+          assignment_group:
+            type: "string"
+            format: "Assignment group from SN to pass into the database entry"
+          snmp_ip:
+            type: "string"
+            format: "CI address of the device"
+          customer_name:
+            type: "string"
+            format: "Customer name from SN to pass into the database entry"
+          configuration_item_name:
+            type: "string"
+            format: "CI Name of the device"
+          detailed_desc:
+            type: "string"
+            format: "Detailed description name from SN to pass into the database entry"
+          inc_number:
+            type: "string"
+            format: "ITSM incident number"
+          inc_sys_id:
+            type: "string"
+            format: "ITSM incident sys_id"
+          short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into the database entry"
+          rec_short_desc:
+            type: "string"
+            format: "Short description name from ITSM to pass into recurrence logic"
+          rec_detailed_desc:
+            type: "string"
+            format: "Detailed description name from ITSM to pass into recurrence logic"
+          interface_descr:
+            type: "string"
+            format: "interface_descr from the ITSM"
+          utilization_threshold:
+            type: "string"
+            format: "threshold for port utilization"
+          nms_ip:
+            type: "string"
+            format: "If entuity is involved"
+    -
+      name: "nw_temperature_alarm"
+      description: "If an incident is created for network resources health alert then check the incident type, try running cleanup, and update the incident with results"
+      payload_schema:
+        type: 'object'
+        properties:
+          assignment_group:
+            type: 'string'
+            format: 'Assignment group from SN to pass into the database entry'
+          customer_name:
+            type: 'string'
+            format: 'Customer name from SN to pass into the database entry'
+          detailed_desc:
+            type: 'string'
+            format: 'Detailed description from SN to pass into the database entry'
+          inc_number:
+            type: 'string'
+            format: 'ITSM incident number'
+          inc_sys_id:
+            type: 'string'
+            format: 'ITSM incident sys id'
+          incident_state:
+            type: 'string'
+            format: 'Incident state from SN to pass into the database entry'
+          short_desc:
+            type: 'string'
+            format: 'Short description from SN to pass into the database entry'
+          rec_short_desc:
+            type: "string"
+            format: "find the recurrence incident with short desc"
+          rec_detailed_desc:
+            type: "string"
+            format: "find the recurrence incident with detail desc"
+          configuration_item_name:
+            type: "string"
+            format: "incident CI name from SN"
+
+    -
+      name: "network_peer_route_disappeared_ospf"
+      description: "If an incident is created for Peer Route Disappeared OSPF then check the incident type, try running cleanup, and update the incident with results"
+      payload_schema:
+        type: 'object'
+        properties:
+          assignment_group:
+            type: 'string'
+            format: 'Assignment group from SN to pass into the database entry'
+          ci_address:
+            type: 'string'
+            format: 'FQDN of the server'
+          customer_name:
+            type: 'string'
+            format: 'Customer name from SN to pass into the database entry'
+          detailed_desc:
+            type: 'string'
+            format: 'Detailed description from SN to pass into the database entry'
+          inc_number:
+            type: 'string'
+            format: 'ITSM incident number'
+          inc_sys_id:
+            type: 'string'
+            format: 'ITSM incident sys id'
+          short_desc:
+            type: 'string'
+            format: 'Short description from SN to pass into the database entry'
+    -
+      name: "nw_power_supply_alarm"
+      description: "If an incident is created for network resources health alert then check the incident type, try checking power status, and update the incident with results"
+      payload_schema:
+        type: 'object'
+        properties:
+          assignment_group:
+            type: 'string'
+            format: 'Assignment group from SN to pass into the database entry'
+          customer_name:
+            type: 'string'
+            format: 'Customer name from SN to pass into the database entry'
+          detailed_desc:
+            type: 'string'
+            format: 'Detailed description from SN to pass into the database entry'
+          inc_number:
+            type: 'string'
+            format: 'ITSM incident number'
+          inc_sys_id:
+            type: 'string'
+            format: 'ITSM incident sys id'
+          incident_state:
+            type: 'string'
+            format: 'Incident state from SN to pass into the database entry'
+          short_desc:
+            type: 'string'
+            format: 'Short description from SN to pass into the database entry'
+          rec_short_desc:
+            type: "string"
+            format: "find the recurrence incident with short desc"
+          rec_detailed_desc:
+            type: "string"
+            format: "find the recurrence incident with detail desc"
+          configuration_item_name:
+            type: "string"
+            format: "incident CI name from SN"
 
