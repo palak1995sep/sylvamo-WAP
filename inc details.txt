@@ -1,2 +1,3 @@
 INC15024540-097c28d01b0cbd50948fea41b24bcb02
 INC15024541 - 193de4141b0cbd50948fea41b24bcb4f
+st2 run ntt_monitoring.disk_usage_check assignment_group="NTTDS-Wintel Global L1" ci_address="KYFTCPNTTJMP01" configuration_item_name="KYFTCPNTTJMP01" customer_abbr="ARCOSA" customer_name="ARCOSA" detailed_desc="KYFTCPNTTJMP01 C: Logical Disk Free Space on KYFTCPNTTJMP01 is at 9.64%, TH is 5.0%" disk_name="C" inc_number="INC15023284" inc_sys_id="4e4130381b77e110948fea41b24bcb10" os_type="windows" rec_detailed_desc="KYFTCPNTTJMP01" rec_short_desc="KYFTCPNTTJMP01 C: Logical Disk Free Space" threshold_percent="95" short_desc="KYFTCPSQLMXN02 C: Logical Disk Free Space on KYFTCPSQLMXN02 is at 9.75%, TH is 5.0%"
