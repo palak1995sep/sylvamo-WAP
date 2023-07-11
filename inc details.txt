@@ -5,3 +5,4 @@ Entuity : 172.20.208.203 : I234-2802-AP12 : AP UNREACHABLE (ICMP)
 NMSENVPOLLFTC07.nttdataservices.com : 172.20.208.203 : I234-2802-AP12 : AP Unreachable (ICMP) : Address = 172.20.216.202: Response type = 0
 WAP_Rec_logic_days          |
 {'1' : 5,'7' : 8,'30' : 12}
+/opt/stackstorm/st2/bin/st2sensorcontainer --config-file=/etc/st2/st2.conf --sensor-ref=ntt_itsm.NetworkDeviceAlarm
