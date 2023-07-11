@@ -3,3 +3,5 @@ INC15024541 - 193de4141b0cbd50948fea41b24bcb4f
 st2 run ntt_monitoring.disk_usage_check assignment_group="NTTDS-Wintel Global L1" ci_address="KYFTCPNTTJMP01" configuration_item_name="KYFTCPNTTJMP01" customer_abbr="ARCOSA" customer_name="ARCOSA" detailed_desc="KYFTCPNTTJMP01 C: Logical Disk Free Space on KYFTCPNTTJMP01 is at 9.64%, TH is 5.0%" disk_name="C" inc_number="INC15023284" inc_sys_id="4e4130381b77e110948fea41b24bcb10" os_type="windows" rec_detailed_desc="KYFTCPNTTJMP01" rec_short_desc="KYFTCPNTTJMP01 C: Logical Disk Free Space" threshold_percent="95" short_desc="KYFTCPSQLMXN02 C: Logical Disk Free Space on KYFTCPSQLMXN02 is at 9.75%, TH is 5.0%"
 Entuity : 172.20.208.203 : I234-2802-AP12 : AP UNREACHABLE (ICMP)
 NMSENVPOLLFTC07.nttdataservices.com : 172.20.208.203 : I234-2802-AP12 : AP Unreachable (ICMP) : Address = 172.20.216.202: Response type = 0
+WAP_Rec_logic_days          |
+{'1' : 5,'7' : 8,'30' : 12}
