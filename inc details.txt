@@ -9,3 +9,4 @@ WAP_Rec_logic_days          |
 LIcruUOvCdp3k-som rest password
 automation.service.ua-som rest usernam
 INC14972966
+INC15024702
