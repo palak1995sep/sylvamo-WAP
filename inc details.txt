@@ -10,3 +10,4 @@ LIcruUOvCdp3k-som rest password
 automation.service.ua-som rest usernam
 INC14972966
 INC15024702
+https://nttdsuat.service-now.com/api/now/attachment/aa7966201bccb190948fea41b24bcbf4/file
