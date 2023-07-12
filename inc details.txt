@@ -8,3 +8,4 @@ WAP_Rec_logic_days          |
 /opt/stackstorm/st2/bin/st2sensorcontainer --config-file=/etc/st2/st2.conf --sensor-ref=ntt_itsm.NetworkDeviceAlarm
 LIcruUOvCdp3k-som rest password
 automation.service.ua-som rest usernam
+INC14972966
