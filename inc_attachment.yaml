@@ -1,0 +1,29 @@
+---
+description: "Add comment, close, and/or escalate the given ServiceNow incident"
+enabled: true
+runner_type: "python-script"
+entry_point: inc_attachment.py
+name: inc_attachment
+pack: ntt_itsm
+parameters:
+  filepath:
+    type: string
+    description: "filepath of the attachment"
+    required: true
+  servicenow_url:
+    type: string
+    description: "Servicenow URL"
+    required: true
+  servicenow_username:
+    type: string
+    description: "username to connect to servicenow"
+    required: true
+  servicenow_password:
+    type: string
+    description: "password to connect to servicenow"
+    required: true
+  number:
+    type: string
+    description: "INC Number"
+    required: true
+  
